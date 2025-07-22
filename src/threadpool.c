@@ -139,9 +139,6 @@ void threadpool_scheduler_free(threadpool_scheduler_t *scheduler)
 
         pthread_mutex_destroy(&scheduler->mutex);
         pthread_cond_destroy(&scheduler->notify);
-
-        scheduler->task_queue.head = NULL;
-        scheduler->task_queue.tail = NULL;
 }
 
 threadpool_t *threadpool_create(unsigned threads_count)
@@ -268,32 +265,33 @@ static void *threadpool_worker_function(void *arg)
 
         threadpool_scheduler_t *scheduler = args->scheduler;
         threadpool_task_queue_t *task_queue = &args->scheduler->task_queue;
+        const char *thread_name = args->thread_name;
 
-        log_info("[%s] Started thread", args->thread_name);
+        log_info("[%s] Started thread", thread_name);
 
         while (true) {
-                pthread_mutex_lock(&args->scheduler->mutex);
+                pthread_mutex_lock(&scheduler->mutex);
 
                 while (NULL == threadpool_task_queue_peek(task_queue) &&
                        !scheduler->is_terminated) {
-                        pthread_cond_wait(&args->scheduler->notify, &args->scheduler->mutex);
+                        pthread_cond_wait(&scheduler->notify, &scheduler->mutex);
                 }
 
                 if (scheduler->is_terminated) {
-                        log_info("[%s] Thread is terminating", args->thread_name);
-                        pthread_mutex_unlock(&args->scheduler->mutex);
+                        log_info("[%s] Thread is terminating", thread_name);
+                        pthread_mutex_unlock(&scheduler->mutex);
                         pthread_exit(NULL);
                 }
 
                 threadpool_task_t *task = threadpool_task_queue_pop_front(task_queue);
 
-                pthread_mutex_unlock(&args->scheduler->mutex);
+                pthread_mutex_unlock(&scheduler->mutex);
 
                 if (NULL == task) {
-                        log_warn("[%s] Received NULL task for execution", args->thread_name);
+                        log_warn("[%s] Received NULL task for execution", thread_name);
                         continue;
                 }
-                log_debug("[%s] Executing task", args->thread_name);
+                log_debug("[%s] Executing task", thread_name);
                 task->function(task->arg);
                 free(task);
         }
