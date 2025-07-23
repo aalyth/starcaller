@@ -13,6 +13,7 @@
 
 #include "logger.h"
 #include "threadpool.h"
+#include "http.h"
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -42,6 +43,14 @@ void handle_client(int client_fd)
         buffer[bytes_read] = '\0';
         printf("Received request:\n%s\n", buffer);
 
+        http_request_t *request = parse_http_request(buffer);
+        log_info("Parsed HTTP request: method=%s, path=%s, version=%s",
+                 request->method ? request->method : "NULL", request->path ? request->path : "NULL",
+                 request->version ? request->version : "NULL");
+        for (int i = 0; request->headers && request->headers[i]; i++) {
+                log_info("Header %d: %s", i, request->headers[i]);
+        }
+
         // Send HTTP response
         ssize_t bytes_sent = write(client_fd, http_response, strlen(http_response));
         if (bytes_sent < 0) {
@@ -58,7 +67,6 @@ void test_func(void *unused)
 
 int main()
 {
-        /*
         const int server_fd = socket(AF_INET, SOCK_STREAM, 0);
         if (server_fd < 0) {
                 log_fatal(EXIT_FAILURE, "Failed to create socket");
@@ -115,19 +123,20 @@ int main()
         }
 
         close(server_fd);
-        */
 
+        /*
         threadpool_t *pool = threadpool_create(10);
 
         sleep(1);
 
         for (int i = 0; i < 1000; ++i) {
-                threadpool_add_task(pool, test_func, NULL);
+                threadpool_execute(pool, test_func, NULL);
         }
 
         sleep(1);
 
         threadpool_free(pool);
+        */
 
         return 0;
 }

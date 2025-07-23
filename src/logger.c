@@ -11,12 +11,20 @@
 
 const char *MSG_ERROR = "ERROR";
 
-typedef enum { DEBUG, INFO, WARN, ERROR, FATAL } LogLevel;
+typedef enum { TRACE, DEBUG, INFO, WARN, ERROR, FATAL } LogLevel;
 
 static void log_message(LogLevel, const char *, va_list);
 static const char *log_level_to_string(LogLevel);
 
 static const char *TIME_FORMAT = "%Y-%m-%d %H:%M:%S";
+
+void log_trace(const char *message, ...)
+{
+        va_list args;
+        va_start(args, message);
+        log_message(TRACE, message, args);
+        va_end(args);
+}
 
 void log_debug(const char *message, ...)
 {
@@ -62,6 +70,8 @@ void log_fatal(int exit_code, const char *message, ...)
 static const char *log_level_to_string(LogLevel level)
 {
         switch (level) {
+        case TRACE:
+                return "TRACE";
         case DEBUG:
                 return "DEBUG";
         case INFO:
