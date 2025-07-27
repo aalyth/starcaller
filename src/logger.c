@@ -9,11 +9,9 @@
 
 #include <pthread.h>
 
-const char *MSG_ERROR = "ERROR";
-
 typedef enum { TRACE, DEBUG, INFO, WARN, ERROR, FATAL } LogLevel;
 
-static void log_message(LogLevel, const char *, va_list);
+static void log_message(LogLevel, const char *, va_list) __attribute__((format(printf, 2, 0)));
 static const char *log_level_to_string(LogLevel);
 
 static const char *TIME_FORMAT = "%Y-%m-%d %H:%M:%S";

@@ -16,58 +16,56 @@ static threadpool_task_t *threadpool_task_alloc(void (*)(void *), void *);
 
 static threadpool_queue_t threadpool_queue_create(void);
 static void threadpool_queue_free(threadpool_queue_t *);
-static const threadpool_task_t *threadpool_task_queue_peek(const threadpool_queue_t *);
+static const threadpool_task_t *threadpool_queue_peek(const threadpool_queue_t *);
 static threadpool_task_t *threadpool_queue_pop_front(threadpool_queue_t *);
 static void threadpool_queue_push_back(threadpool_queue_t *, threadpool_task_t *);
 
 static threadpool_scheduler_t *threadpool_scheduler_create(void);
 static void threadpool_scheduler_free(threadpool_scheduler_t *);
 
-static threadpool_task_t *threadpool_scheduler_await_task(threadpool_scheduler_t *);
-
 static void *threadpool_worker_function(void *);
 static void free_threads(pthread_t *, size_t);
 
-threadpool_t *threadpool_create(unsigned threads_count)
+threadpool_t *threadpool_create(size_t threads_count)
 {
         pthread_t *threads = malloc(threads_count * sizeof(pthread_t));
-        if (NULL == threads) {
+        if (!threads) {
                 log_warn("Failed to allocate thread pool threads");
                 return NULL;
         }
 
         threadpool_scheduler_t *scheduler = threadpool_scheduler_create();
-        if (NULL == scheduler) {
+        if (!scheduler) {
                 log_error("Failed to create thread pool scheduler");
                 free(threads);
                 return NULL;
         }
 
-        for (int i = 0; i < threads_count; ++i) {
+        for (size_t i = 0; i < threads_count; ++i) {
                 pthread_t *thread = &threads[i];
 
                 const size_t MAX_THREAD_NAME_LENGTH = 32;
                 char *thread_name = malloc(MAX_THREAD_NAME_LENGTH);
-                snprintf(thread_name, MAX_THREAD_NAME_LENGTH, "worker-thread-%u", i);
+                snprintf(thread_name, MAX_THREAD_NAME_LENGTH, "worker-thread-%lu", i);
 
                 thread_creation_args_t *args = malloc(sizeof(thread_creation_args_t));
                 args->scheduler = scheduler;
                 args->thread_name = thread_name;
 
                 if (pthread_create(thread, NULL, threadpool_worker_function, args) != 0) {
-                        log_error("Failed to create thread %u", i);
+                        log_error("Failed to create thread %lu", i);
                         free_threads(threads, i);
                         return NULL;
                 }
         }
 
         threadpool_t *pool = malloc(sizeof(threadpool_t));
-        if (NULL == pool) {
+        if (!pool) {
                 log_warn("Failed to allocate thread pool structure");
                 return NULL;
         }
 
-        *(unsigned *)&pool->thread_count = threads_count;
+        *(size_t *)&pool->thread_count = threads_count;
         pool->threads = threads;
         pool->scheduler = scheduler;
 
@@ -76,7 +74,7 @@ threadpool_t *threadpool_create(unsigned threads_count)
 
 void threadpool_free(threadpool_t *pool)
 {
-        if (NULL == pool) {
+        if (!pool) {
                 log_trace("Trying to free a NULL thread pool");
                 return;
         }
@@ -99,13 +97,13 @@ void threadpool_free(threadpool_t *pool)
 
 void threadpool_execute(threadpool_t *pool, void (*function)(void *), void *arg)
 {
-        if (NULL == pool || NULL == function) {
+        if (!pool || !function) {
                 log_trace("Trying to add a NULL task to a NULL thread pool");
                 return;
         }
 
         threadpool_task_t *task = threadpool_task_alloc(function, arg);
-        if (NULL == task) {
+        if (!task) {
                 log_error("Failed to allocate task for thread pool");
                 return;
         }
@@ -119,7 +117,7 @@ void threadpool_execute(threadpool_t *pool, void (*function)(void *), void *arg)
 static threadpool_task_t *threadpool_task_alloc(void (*function)(void *), void *arg)
 {
         threadpool_task_t *task = malloc(sizeof(threadpool_task_t));
-        if (NULL == task) {
+        if (!task) {
                 log_trace("Failed to allocate thread pool task");
                 return NULL;
         }
@@ -141,7 +139,7 @@ static threadpool_queue_t threadpool_queue_create(void)
 
 static void threadpool_queue_free(threadpool_queue_t *queue)
 {
-        if (NULL == queue) {
+        if (!queue) {
                 log_trace("Trying to free a NULL task queue");
                 return;
         }
@@ -158,7 +156,7 @@ static void threadpool_queue_free(threadpool_queue_t *queue)
 
 static const threadpool_task_t *threadpool_queue_peek(const threadpool_queue_t *queue)
 {
-        if (NULL == queue) {
+        if (!queue) {
                 log_trace("Trying to peek into a NULL task queue");
                 return NULL;
         }
@@ -167,7 +165,7 @@ static const threadpool_task_t *threadpool_queue_peek(const threadpool_queue_t *
 
 static threadpool_task_t *threadpool_queue_pop_front(threadpool_queue_t *queue)
 {
-        if (NULL == queue || NULL == queue->head) {
+        if (!queue || !queue->head) {
                 log_trace("Trying to pop from an empty or NULL task queue");
                 return NULL;
         }
@@ -175,7 +173,7 @@ static threadpool_task_t *threadpool_queue_pop_front(threadpool_queue_t *queue)
         threadpool_task_t *popped_task = queue->head;
         queue->head = popped_task->next;
 
-        if (NULL == queue->head) {
+        if (!queue->head) {
                 queue->tail = NULL;
         }
 
@@ -184,12 +182,12 @@ static threadpool_task_t *threadpool_queue_pop_front(threadpool_queue_t *queue)
 
 static void threadpool_queue_push_back(threadpool_queue_t *queue, threadpool_task_t *task)
 {
-        if (NULL == queue || NULL == task) {
+        if (!queue || !task) {
                 log_trace("Trying to push a NULL task or into a NULL queue");
                 return;
         }
 
-        if (NULL == queue->tail) {
+        if (!queue->tail) {
                 queue->head = task;
                 queue->tail = task;
         } else {
@@ -201,7 +199,7 @@ static void threadpool_queue_push_back(threadpool_queue_t *queue, threadpool_tas
 static threadpool_scheduler_t *threadpool_scheduler_create(void)
 {
         threadpool_scheduler_t *scheduler = malloc(sizeof(threadpool_scheduler_t));
-        if (NULL == scheduler) {
+        if (!scheduler) {
                 log_trace("Failed to allocate thread pool scheduler");
                 return NULL;
         }
@@ -226,7 +224,7 @@ static threadpool_scheduler_t *threadpool_scheduler_create(void)
 
 static void threadpool_scheduler_free(threadpool_scheduler_t *scheduler)
 {
-        if (NULL == scheduler) {
+        if (!scheduler) {
                 log_trace("Trying to free a NULL thread pool scheduler");
                 return;
         }
@@ -244,23 +242,21 @@ static void threadpool_scheduler_free(threadpool_scheduler_t *scheduler)
 
 static void free_threads(pthread_t *threads, size_t threads_count)
 {
-        if (NULL == threads) {
+        if (!threads) {
                 log_trace("Calling `clear_failed_threadpool()` with no threads");
                 return;
         }
 
-        for (int i = 0; i < threads_count; ++i) {
+        for (size_t i = 0; i < threads_count; ++i) {
                 pthread_t *thread = &threads[i];
-                if (pthread_cancel(*thread) != 0) {
-                        log_trace("Failed to cancel threadpool thread %d", i);
-                }
+                if (pthread_cancel(*thread) != 0)
+                        log_trace("Failed canceling threadpool thread %lu", i);
         }
 
-        for (int i = 0; i < threads_count; ++i) {
+        for (size_t i = 0; i < threads_count; ++i) {
                 pthread_t *thread = &threads[i];
-                if (pthread_join(*thread, NULL) != 0) {
-                        log_trace("Failed to join threadpool thread %d", i);
-                }
+                if (pthread_join(*thread, NULL) != 0)
+                        log_trace("Failed joining threadpool thread %lu", i);
         }
 
         free(threads);
@@ -269,7 +265,7 @@ static void free_threads(pthread_t *threads, size_t threads_count)
 
 static void *threadpool_worker_function(void *arg)
 {
-        if (NULL == arg) {
+        if (!arg) {
                 log_error("Threadpool worker function received NULL argument");
                 return NULL;
         }
@@ -285,9 +281,8 @@ static void *threadpool_worker_function(void *arg)
         while (true) {
                 pthread_mutex_lock(&scheduler->mutex);
 
-                while (NULL == threadpool_queue_peek(queue) && !scheduler->is_terminated) {
+                while (!threadpool_queue_peek(queue) && !scheduler->is_terminated)
                         pthread_cond_wait(&scheduler->notify, &scheduler->mutex);
-                }
 
                 if (scheduler->is_terminated) {
                         log_info("[%s] Thread is terminating", thread_name);
@@ -299,13 +294,15 @@ static void *threadpool_worker_function(void *arg)
 
                 pthread_mutex_unlock(&scheduler->mutex);
 
-                if (NULL == task) {
+                if (!task) {
                         log_warn("[%s] Received NULL task for execution", thread_name);
                         continue;
                 }
+
                 log_trace("[%s] Executing task", thread_name);
                 task->function(task->arg);
                 free(task);
         }
+
         return NULL;
 }

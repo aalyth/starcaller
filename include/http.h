@@ -18,6 +18,8 @@ typedef enum {
         _HTTP_UNKNOWN,
 } http_method_t;
 
+#define HTTP_METHOD_COUNT _HTTP_UNKNOWN
+
 typedef struct {
         http_method_t method;
         char *method_str;
@@ -27,13 +29,13 @@ typedef struct {
         char *body;
 } http_request_t;
 
-http_request_t *parse_http_request(const char *);
-
 typedef struct {
-        int status_code;
+        size_t status_code;
         char *body;
         char **headers;
 } http_response_t;
+
+http_response_t *create_response(size_t, const char *);
 
 typedef enum http_status_code {
         HTTP_OK = 200,
@@ -50,11 +52,11 @@ typedef enum http_status_code {
         HTTP_SERVICE_UNAVAILABLE = 503
 } http_status_code_t;
 
-typedef http_response_t *(*route_handler_t)(const http_request_t *request);
+typedef http_response_t *(*http_handler_t)(const http_request_t *);
 
 typedef struct {
         char *path;
-        route_handler_t handler;
+        http_handler_t handler;
 } url_route_entry_t;
 
 typedef struct {
@@ -65,20 +67,32 @@ typedef struct {
 
 typedef struct {
         url_router_t methods[_HTTP_UNKNOWN];
-        route_handler_t not_found_handler;
-        route_handler_t method_not_allowed_handler;
+        http_handler_t not_found_handler;
+        http_handler_t method_not_allowed_handler;
 } http_router_t;
 
 typedef struct {
-        threadpool_t *request_handler_pool;
-        unsigned int threadpool_size;
+        size_t threads;
+        size_t max_pending_requests;
 
-        unsigned int max_queue;
+        unsigned short port;
+        unsigned int address;
+} server_config_t;
+
+typedef struct {
+        threadpool_t *threadpool;
+
+        size_t max_pending_requests;
 
         unsigned short port;
         unsigned int address;
 
         http_router_t *router;
 } server_t;
+
+server_t *server_new(server_config_t);
+int server_add_route(server_t *, http_method_t, const char *, http_handler_t);
+void server_start(server_t *);
+void server_free(server_t *);
 
 #endif

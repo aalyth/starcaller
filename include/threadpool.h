@@ -24,13 +24,13 @@ typedef struct {
 } threadpool_scheduler_t;
 
 typedef struct {
-        const unsigned int thread_count;
+        size_t thread_count;
         pthread_t *threads;
 
         threadpool_scheduler_t *scheduler;
 } threadpool_t;
 
-threadpool_t *threadpool_create(unsigned);
+threadpool_t *threadpool_create(size_t);
 void threadpool_free(threadpool_t *);
 
 void threadpool_execute(threadpool_t *, void (*)(void *), void *);
