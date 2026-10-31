@@ -1,16 +1,14 @@
-
-
 #include <stdio.h>
 #include <err.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #ifndef STAR_PORT
-// #define STAR_PORT 5778
 #define STAR_PORT 8080
 #endif
 
@@ -28,18 +26,34 @@
 
 #define defer(f) __attribute__((cleanup(f)))
 
-void socket_close(const int *sfd)
+volatile sig_atomic_t terminated = 0;
+
+const char *response = "HTTP/1.1 200 OK\n"
+                       "Server: Star\n\n"
+                       "<h1>calling stars</h1>";
+
+void stop_http_server(const int sig)
 {
-	printf("Closing socket %d\n", *sfd);
+	terminated = 1;
+}
+
+void close_socket(const int *sfd)
+{
+	if (!sfd)
+		return;
 	if (-1 == close(*sfd))
-		dprintf(STDERR_FILENO, "Failed to close socket %d: %s\n", *sfd, strerror(errno));
+		dprintf(STDERR_FILENO, "cannot close socket(%d): %s\n", *sfd, strerror(errno));
 }
 
 int main()
 {
-	const int defer(socket_close) sfd = socket(AF_INET, SOCK_STREAM, 0);
+	const int defer(close_socket) sfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sfd == -1)
-		err(-1, "Failed to create socket");
+		err(-1, "failed to create socket");
+
+	const int reuse = 1;
+	if (-1 == setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)))
+		err(-1, "cannot set SO_REUSEADDR");
 
 	const struct sockaddr_in addr = {
 		.sin_family = AF_INET,
@@ -47,26 +61,29 @@ int main()
 		.sin_addr.s_addr = INADDR_ANY,
 	};
 	if (-1 == bind(sfd, (const struct sockaddr *)&addr, sizeof(addr)))
-		err(-1, "Failed to bind socket to %ld:%hd", STAR_ADDR, STAR_PORT);
+		err(-1, "cannot bind socket to %ld:%hd", STAR_ADDR, STAR_PORT);
 
 	if (-1 == listen(sfd, STAR_REQUEST_BACKLOG))
-		err(-1, "Failed to start listening on %ld:%hd", STAR_ADDR, STAR_PORT);
+		err(-1, "cannot listen on %ld:%hd", STAR_ADDR, STAR_PORT);
 	printf("Server listening on %ld:%hd\n", STAR_ADDR, STAR_PORT);
 
-	int reqfd;
-	struct sockaddr_in client_addr;
-	socklen_t client_addr_len;
-	if (-1 == (reqfd = accept(sfd, (struct sockaddr *)&client_addr, &client_addr_len)))
-		err(-1, "Failed to accept connection to %ld:%hd", STAR_ADDR, STAR_PORT);
+	while (!terminated) {
+		struct sockaddr_in client_addr;
+		socklen_t client_addr_len;
+		int reqfd = accept(sfd, (struct sockaddr *)&client_addr, &client_addr_len);
+		if (reqfd == -1)
+			err(-1, "cannot accept connection to %ld:%hd", STAR_ADDR, STAR_PORT);
 
-	uint8_t request_buffer[STAR_BUF_SIZE];
-	ssize_t bytes_read;
-	if (-1 == (bytes_read = recv(reqfd, request_buffer, STAR_BUF_SIZE, 0)))
-		err(-1, "Failed to read from socket");
-	request_buffer[bytes_read] = '\0';
+		uint8_t reqbuf[STAR_BUF_SIZE];
+		ssize_t bytes_read;
+		if (-1 == (bytes_read = recv(reqfd, reqbuf, STAR_BUF_SIZE, 0)))
+			err(-1, "reading from socket");
+		reqbuf[bytes_read] = '\0';
+		printf("Read %ld bytes request:\n%s\n", bytes_read, reqbuf);
 
-	printf("Read %ld bytes request: %s\n", bytes_read, request_buffer);
+		write(reqfd, response, strlen(response));
+		close(reqfd);
+	}
 
-	printf("hello there \n");
 	return 0;
 }
